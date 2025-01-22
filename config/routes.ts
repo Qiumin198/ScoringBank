@@ -29,6 +29,12 @@ export default [
     component: './Welcome',
   },
   {
+    path: '/project-type',
+    name: 'project-type',
+    icon: 'folder',
+    component: './ProjectType',
+  },
+  {
     path: '/admin',
     name: 'admin',
     icon: 'crown',
