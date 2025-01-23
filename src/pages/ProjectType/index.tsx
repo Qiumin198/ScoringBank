@@ -1,19 +1,29 @@
-import { PlusOutlined } from '@ant-design/icons';
 import { ActionType, PageContainer, ProColumns, ProTable } from '@ant-design/pro-components';
 import { Button, Form, Input, Modal, Select, message } from 'antd';
 import React, { useRef, useState } from 'react';
 
+// 在文件开头添加基础 URL 和 token 配置
+const BASE_URL = 'http://localhost:8088';
+const TOKEN =
+  'eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3Mzc2MzIzNTZ9.72dLbKF3impiJJCEG2YZTBg-3NysgV6wAHh3swZ_SLg';
+
+// 创建通用的请求头
+const headers = {
+  'Content-Type': 'application/json',
+  token: TOKEN,
+};
+
 // 定义项目类型的数据结构
 type ProjectTypeItem = {
-  PtId: number;
-  PtName: string;
-  PtState: number;
+  ptId: number;
+  ptName: string;
+  ptState: string;
 };
 
 // 模拟数据
 const initialData: ProjectTypeItem[] = [
-  { PtId: 1, PtName: '类型1', PtState: 1 },
-  { PtId: 2, PtName: '类型2', PtState: 0 },
+  { ptId: 1, ptName: '类型1', ptState: '启用' },
+  { ptId: 2, ptName: '类型2', ptState: '禁用' },
 ];
 
 const ProjectType: React.FC = () => {
@@ -23,38 +33,96 @@ const ProjectType: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const [dataSource, setDataSource] = useState<ProjectTypeItem[]>(initialData);
 
-  // 处理删除
-  const handleDelete = (id: number) => {
-    Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除这条记录吗？',
-      onOk: () => {
-        setDataSource(dataSource.filter((item) => item.PtId !== id));
-        message.success('删除成功');
+  // 将函数定义移到使用之前
+  const handleAdd = async (fields: ProjectTypeItem) => {
+    try {
+      const response = await fetch(`${BASE_URL}/project/type/add`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+          ptName: fields.ptName,
+          ptState: fields.ptState,
+        }),
+      });
+      const result = await response.json();
+      if (result.code === 200) {
+        message.success('添加成功');
         actionRef.current?.reload();
-      },
-    });
+        return true;
+      }
+      message.error(result.msg || '添加失败');
+      return false;
+    } catch (error) {
+      message.error('添加失败');
+      return false;
+    }
+  };
+
+  const handleEdit = async (fields: ProjectTypeItem) => {
+    try {
+      const response = await fetch(`${BASE_URL}/project/type/edit`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+          ptId: fields.ptId,
+          ptName: fields.ptName,
+          ptState: fields.ptState,
+        }),
+      });
+      const result = await response.json();
+      if (result.code === 200) {
+        message.success('修改成功');
+        actionRef.current?.reload();
+        return true;
+      }
+      message.error(result.msg || '修改失败');
+      return false;
+    } catch (error) {
+      message.error('修改失败');
+      return false;
+    }
+  };
+
+  const handleDelete = async (ptId: number) => {
+    try {
+      const response = await fetch(`${BASE_URL}/project/type/delete?ptId=${ptId}`, {
+        method: 'DELETE',
+        headers: headers,
+      });
+      const result = await response.json();
+      if (result.code === 200) {
+        message.success('删除成功');
+        setDataSource(dataSource.filter((item) => item.ptId !== ptId));
+        actionRef.current?.reload();
+        return true;
+      }
+      message.error(result.msg || '删除失败');
+      return false;
+    } catch (error) {
+      message.error('删除失败');
+      return false;
+    }
   };
 
   // 表格列定义
   const columns: ProColumns<ProjectTypeItem>[] = [
     {
       title: '类型ID',
-      dataIndex: 'PtId',
+      dataIndex: 'ptId',
       width: 80,
     },
     {
       title: '类型名称',
-      dataIndex: 'PtName',
+      dataIndex: 'ptName',
       width: 150,
     },
     {
       title: '状态',
-      dataIndex: 'PtState',
+      dataIndex: 'ptState',
       width: 100,
       valueEnum: {
-        0: { text: '禁用', status: 'Error' },
-        1: { text: '启用', status: 'Success' },
+        启用: { text: '启用', status: 'Success' },
+        禁用: { text: '禁用', status: 'Error' },
       },
     },
     {
@@ -74,7 +142,7 @@ const ProjectType: React.FC = () => {
         >
           修改
         </Button>,
-        <Button key="delete" type="link" danger onClick={() => handleDelete(record.PtId)}>
+        <Button key="delete" type="link" danger onClick={() => handleDelete(record.ptId)}>
           删除
         </Button>,
       ],
@@ -89,18 +157,18 @@ const ProjectType: React.FC = () => {
         // 修改
         setDataSource(
           dataSource.map((item) =>
-            item.PtId === editingRecord.PtId ? { ...item, ...values } : item,
+            item.ptId === editingRecord.ptId ? { ...item, ...values } : item,
           ),
         );
-        message.success('修改成功');
+        await handleEdit(values);
       } else {
         // 添加
         const newItem = {
           ...values,
-          PtId: Math.max(...dataSource.map((item) => item.PtId)) + 1,
+          ptId: Math.max(...dataSource.map((item) => item.ptId)) + 1,
         };
         setDataSource([...dataSource, newItem]);
-        message.success('添加成功');
+        await handleAdd(newItem);
       }
       setModalVisible(false);
       form.resetFields();
@@ -116,22 +184,42 @@ const ProjectType: React.FC = () => {
       <ProTable<ProjectTypeItem>
         headerTitle="项目类型列表"
         actionRef={actionRef}
-        rowKey="PtId"
+        rowKey="ptId"
         search={false}
-        toolBarRender={() => [
-          <Button
-            type="primary"
-            key="add"
-            onClick={() => {
-              setEditingRecord(null);
-              form.resetFields();
-              setModalVisible(true);
-            }}
-          >
-            <PlusOutlined /> 新建
-          </Button>,
-        ]}
-        dataSource={dataSource}
+        request={async (params) => {
+          try {
+            const response = await fetch(`${BASE_URL}/project/type/get`, {
+              method: 'POST',
+              headers: headers,
+              body: JSON.stringify({
+                page: params.current ? params.current - 1 : 0,
+                size: params.pageSize || 10,
+              }),
+            });
+            const result = await response.json();
+
+            // 根据实际返回的数据格式进行处理
+            return {
+              data: result.data?.jfProjectTypes || [], // 使用 jfProjectTypes 作为数据源
+              success: result.code === 200,
+              total: result.data?.total || 0,
+              pageSize: params.pageSize,
+              current: params.current,
+            };
+          } catch (error) {
+            message.error('获取数据失败');
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
+        }}
+        pagination={{
+          pageSize: 10,
+          showQuickJumper: true,
+          showSizeChanger: true,
+        }}
         columns={columns}
       />
 
@@ -147,21 +235,26 @@ const ProjectType: React.FC = () => {
         destroyOnClose
       >
         <Form form={form} layout="vertical" initialValues={editingRecord || {}}>
+          {editingRecord && (
+            <Form.Item name="ptId" hidden>
+              <Input />
+            </Form.Item>
+          )}
           <Form.Item
-            name="PtName"
+            name="ptName"
             label="类型名称"
             rules={[{ required: true, message: '请输入类型名称' }]}
           >
             <Input placeholder="请输入类型名称" />
           </Form.Item>
           <Form.Item
-            name="PtState"
+            name="ptState"
             label="状态"
             rules={[{ required: true, message: '请选择状态' }]}
           >
             <Select>
-              <Select.Option value={1}>启用</Select.Option>
-              <Select.Option value={0}>禁用</Select.Option>
+              <Select.Option value="启用">启用</Select.Option>
+              <Select.Option value="禁用">禁用</Select.Option>
             </Select>
           </Form.Item>
         </Form>
